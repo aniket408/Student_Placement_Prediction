@@ -1,5 +1,5 @@
 
-name: Student Placement Prediction CI
+name: Student Placement Prediction CI-CD
 
 'on':
   push:
@@ -20,32 +20,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout Repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # 2. Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           cache: pip
 
+      # 3. Install Dependencies
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest
 
+      # 4. Generate Dataset
       - name: Generate Dataset
         run: |
           python generate_data.py
 
+      # 5. Train ML Model
       - name: Train ML Model
         run: |
           python src/train_model.py
 
+      # 6. Run Automated Tests
       - name: Run Automated Tests
         run: |
           python -m pytest -v
 
+      # 7. Build Docker Image
       - name: Build Docker Image
         run: |
           docker build -t student-placement-prediction:latest .
+
+      # 8. Deploy to Render
+      - name: Deploy to Render
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Render Deploy Hook secret is missing"
+            exit 1
+          fi
+
+          curl --fail --show-error --silent \
+            --request POST \
+            "$RENDER_DEPLOY_HOOK_URL"
+
+          echo "Render deployment triggered successfully!"
